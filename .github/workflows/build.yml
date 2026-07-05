@@ -25,14 +25,12 @@ jobs:
 
       - name: Install Dependencies
         run: flutter pub get
-        working-directory: ./pdf_app
 
       - name: Build APK
         run: flutter build apk --release
-        working-directory: ./pdf_app
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Mera-PDF-App-APK
-          path: pdf_app/build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
