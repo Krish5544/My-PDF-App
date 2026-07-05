@@ -13,8 +13,9 @@ dependencies:
   syncfusion_flutter_pdfviewer: ^24.1.41
   file_picker: ^8.0.0
   shared_preferences: ^2.2.3
-  pdf: ^3.10.8           # इमेज को पीडीएफ में बदलने के लिए नई लाइब्रेरी
-  path_provider: ^2.1.1 # पीडीएफ फाइल को फोन में सेव करने का रास्ता ढूंढने के लिए
+  pdf: ^3.10.8
+  path_provider: ^2.1.1
+  image: ^4.1.7 # फोटो को 90 डिग्री घुमाने के लिए नई लाइब्रेरी
 
 flutter:
   uses-material-design: true
