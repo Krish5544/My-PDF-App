@@ -1,11 +1,13 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pdf/pdf.dart'; // पीडीएफ क्रिएशन के लिए
-import 'package:pdf/widgets.dart' as pw; // पीडीएफ विजेट्स के लिए
-import 'package:path_provider/path_provider.dart'; // फाइल पाथ के लिए
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:image/image.dart' as img_pkg; // इमेज रोटेट करने के लिए
 
 void main() {
   runApp(MyApp());
@@ -74,7 +76,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       MaterialPageRoute(
         builder: (context) => PdfViewerScreen(pdfPath: path),
       ),
-    ).then((_) => _loadRecentFiles()); // वापस आने पर रिसेंट लिस्ट रिफ्रेश होगी
+    ).then((_) => _loadRecentFiles());
   }
 
   @override
@@ -90,13 +92,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ऊपर का हिस्सा: फीचर्स के बटन्स (ग्रिड/रो लुक)
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                // बटन 1: PDF खोलें
                 InkWell(
                   onTap: _pickPdf,
                   child: Column(
@@ -112,7 +112,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 SizedBox(width: 30),
-                // बटन 2: इमेज टू PDF
                 InkWell(
                   onTap: () {
                     Navigator.push(
@@ -135,10 +134,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
           ),
-          
           Divider(color: Colors.grey[800], thickness: 1),
-          
-          // नीचे का हिस्सा: रिसेंट फाइल्स
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10),
             child: Text(
@@ -146,7 +142,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               style: TextStyle(color: Colors.grey[400], fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
-          
           Expanded(
             child: _recentFiles.isEmpty
                 ? Center(
@@ -175,58 +170,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// ------ नया पन्ना: इमेज टू पीडीएफ (प्रीव्यू और ऑर्डर सेटिंग्स के साथ) ------
+// ------ फोटो का डेटा स्टोर करने के लिए एक नई क्लास ------
+class SelectedImage {
+  final File file;
+  int quarterTurns; // 90 डिग्री के लिए (0, 1, 2, 3)
+
+  SelectedImage({required this.file, this.quarterTurns = 0});
+}
+
+// ------ नया पन्ना: इमेज टू पीडीएफ (प्रीव्यू और रोटेट के साथ) ------
 class ImageToPdfScreen extends StatefulWidget {
   @override
   _ImageToPdfScreenState createState() => _ImageToPdfScreenState();
 }
 
 class _ImageToPdfScreenState extends State<ImageToPdfScreen> {
-  List<File> _selectedImages = []; // चुनी गई इमेजेस की लिस्ट
+  List<SelectedImage> _selectedImages = [];
   bool _isConverting = false;
 
-  // गैलरी से मल्टीपल इमेजेस चुनने का फंक्शन
   Future<void> _pickImages() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.image,
-      allowMultiple: true, // एक से ज्यादा फोटो चुनने की परमिशन
+      allowMultiple: true,
     );
 
     if (result != null) {
       setState(() {
-        _selectedImages.addAll(result.paths.map((path) => File(path!)).toList());
+        _selectedImages.addAll(result.paths.map((path) => SelectedImage(file: File(path!))).toList());
       });
     }
   }
 
-  // पेज को ऊपर ले जाने का फंक्शन
   void _moveUp(int index) {
     if (index > 0) {
       setState(() {
-        File temp = _selectedImages.removeAt(index);
+        SelectedImage temp = _selectedImages.removeAt(index);
         _selectedImages.insert(index - 1, temp);
       });
     }
   }
 
-  // पेज को नीचे ले जाने का फंक्शन
   void _moveDown(int index) {
     if (index < _selectedImages.length - 1) {
       setState(() {
-        File temp = _selectedImages.removeAt(index);
+        SelectedImage temp = _selectedImages.removeAt(index);
         _selectedImages.insert(index + 1, temp);
       });
     }
   }
 
-  // इमेज को लिस्ट से हटाने का फंक्शन
   void _removeImage(int index) {
     setState(() {
       _selectedImages.removeAt(index);
     });
   }
 
-  // फाइनल पीडीएफ बनाने का फंक्शन
+  // --- इमेज को फुल स्क्रीन में दिखाने का फंक्शन (Preview) ---
+  void _showImagePreview(SelectedImage item) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.all(10),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            InteractiveViewer( // फोटो को ज़ूम करने की सुविधा
+              child: RotatedBox(
+                quarterTurns: item.quarterTurns,
+                child: Image.file(item.file),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                icon: Icon(Icons.close, color: Colors.white, size: 35),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _convertToPdf() async {
     if (_selectedImages.isEmpty) return;
 
@@ -237,26 +265,35 @@ class _ImageToPdfScreenState extends State<ImageToPdfScreen> {
     try {
       final pdf = pw.Document();
 
-      // सभी चुनी गई इमेजेस को एक-एक पेज पर जोड़ना
-      for (var imageFile in _selectedImages) {
-        final image = pw.MemoryImage(imageFile.readAsBytesSync());
+      for (var item in _selectedImages) {
+        Uint8List imageBytes = await item.file.readAsBytes();
+
+        // अगर फोटो घुमाई गई है (Rotate), तो उसे प्रोसेस करें
+        if (item.quarterTurns % 4 != 0) {
+          img_pkg.Image? decodedImage = img_pkg.decodeImage(imageBytes);
+          if (decodedImage != null) {
+            int angle = (item.quarterTurns % 4) * 90;
+            img_pkg.Image rotatedImage = img_pkg.copyRotate(decodedImage, angle: angle);
+            imageBytes = img_pkg.encodeJpg(rotatedImage); // घुमाकर वापस सेव करना
+          }
+        }
+
+        final pdfImage = pw.MemoryImage(imageBytes);
         pdf.addPage(
           pw.Page(
             pageFormat: PdfPageFormat.a4,
             build: (pw.Context context) {
-              return pw.Center(child: pw.Image(image, fit: pw.BoxFit.contain));
+              return pw.Center(child: pw.Image(pdfImage, fit: pw.BoxFit.contain));
             },
           ),
         );
       }
 
-      // फोन की डॉक्यूमेंट डायरेक्टरी में सेव करना ताकि सुरक्षित रहे
       final outputDir = await getApplicationDocumentsDirectory();
       final filePath = "${outputDir.path}/PDF_${DateTime.now().millisecondsSinceEpoch}.pdf";
       final file = File(filePath);
       await file.writeAsBytes(await pdf.save());
 
-      // रिसेंट मेमोरी में सेव करें
       SharedPreferences prefs = await SharedPreferences.getInstance();
       List<String> recents = prefs.getStringList('recent_pdfs') ?? [];
       recents.insert(0, filePath);
@@ -266,7 +303,7 @@ class _ImageToPdfScreenState extends State<ImageToPdfScreen> {
         SnackBar(content: Text("पीडीएफ सफलतापूर्वक बन गई है!")),
       );
 
-      Navigator.pop(context); // काम पूरा होने पर डैशबोर्ड पर वापस जाएं
+      Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("एरर: पीडीएफ नहीं बन सकी")),
@@ -288,11 +325,19 @@ class _ImageToPdfScreenState extends State<ImageToPdfScreen> {
         foregroundColor: Colors.white,
       ),
       body: _isConverting
-          ? Center(child: CircularProgressIndicator(color: Colors.greenAccent))
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: Colors.blueAccent),
+                  SizedBox(height: 20),
+                  Text("PDF बन रही है, कृपया प्रतीक्षा करें...", style: TextStyle(color: Colors.white, fontSize: 16))
+                ],
+              ),
+            )
           : Column(
               children: [
                 SizedBox(height: 15),
-                // इमेजेस चुनने का बटन
                 ElevatedButton.icon(
                   onPressed: _pickImages,
                   icon: Icon(Icons.add_photo_alternate, color: Colors.black),
@@ -300,52 +345,66 @@ class _ImageToPdfScreenState extends State<ImageToPdfScreen> {
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent),
                 ),
                 SizedBox(height: 15),
-                // प्रीव्यू और री-ऑर्डर लिस्ट
                 Expanded(
                   child: _selectedImages.isEmpty
                       ? Center(child: Text("कोई इमेज नहीं चुनी गई है", style: TextStyle(color: Colors.grey)))
                       : ListView.builder(
                           itemCount: _selectedImages.length,
                           itemBuilder: (context, index) {
+                            var item = _selectedImages[index];
                             return Card(
                               color: Colors.grey[850],
-                              margin: EdgeInsets.symmetric(horizontal: 15, vertical: 6),
+                              margin: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               child: ListTile(
-                                leading: ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: Image.file(_selectedImages[index], width: 50, height: 50, fit: BoxFit.cover),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                // फोटो पर क्लिक करने पर प्रीव्यू खुलेगा
+                                leading: InkWell(
+                                  onTap: () => _showImagePreview(item),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: RotatedBox(
+                                      quarterTurns: item.quarterTurns,
+                                      child: Image.file(item.file, width: 50, height: 50, fit: BoxFit.cover),
+                                    ),
+                                  ),
                                 ),
                                 title: Text("पेज नंबर ${index + 1}", style: TextStyle(color: Colors.white)),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    // ऊपर ले जाने का बटन
-                                    IconButton(
-                                      icon: Icon(Icons.arrow_upward, color: Colors.grey),
-                                      onPressed: index == 0 ? null : () => _moveUp(index),
-                                    ),
-                                    // नीचे ले जाने का बटन
-                                    IconButton(
-                                      icon: Icon(Icons.arrow_downward, color: Colors.grey),
-                                      onPressed: index == _selectedImages.length - 1 ? null : () => _moveDown(index),
-                                    ),
-                                    // डिलीट बटन
-                                    IconButton(
-                                      icon: Icon(Icons.delete, color: Colors.redAccent),
-                                      onPressed: () => _removeImage(index),
-                                    ),
-                                  ],
+                                trailing: FittedBox(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // नया 90-डिग्री रोटेट बटन
+                                      IconButton(
+                                        icon: Icon(Icons.rotate_right, color: Colors.blueAccent, size: 26),
+                                        onPressed: () {
+                                          setState(() {
+                                            item.quarterTurns = (item.quarterTurns + 1) % 4;
+                                          });
+                                        },
+                                      ),
+                                      IconButton(
+                                        icon: Icon(Icons.arrow_upward, color: Colors.grey, size: 24),
+                                        onPressed: index == 0 ? null : () => _moveUp(index),
+                                      ),
+                                      IconButton(
+                                        icon: Icon(Icons.arrow_downward, color: Colors.grey, size: 24),
+                                        onPressed: index == _selectedImages.length - 1 ? null : () => _moveDown(index),
+                                      ),
+                                      IconButton(
+                                        icon: Icon(Icons.delete, color: Colors.redAccent, size: 24),
+                                        onPressed: () => _removeImage(index),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             );
                           },
                         ),
                 ),
-                // फाइनल पीडीएफ बनाने का बटन (सिर्फ तब दिखेगा जब इमेज चुनी हो)
                 if (_selectedImages.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.all(20.0),
-                    key: ValueKey('generate_btn'),
                     child: Container(
                       width: double.infinity,
                       height: 50,
