@@ -23,6 +23,10 @@ jobs:
         with:
           channel: 'stable'
 
+      # यह नया जादुई स्टेप है जो आपके लिए बैकग्राउंड में Android की 100+ फाइलें बना देगा
+      - name: Create Flutter Project Files
+        run: flutter create . --platforms android
+
       - name: Install Dependencies
         run: flutter pub get
 
