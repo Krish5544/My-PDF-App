@@ -21,9 +21,8 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          flutter-version: '3.19.6' # हमने रोबोट को एक स्टेबल मशीन इस्तेमाल करने को कहा है
 
-      # यह नया जादुई स्टेप है जो आपके लिए बैकग्राउंड में Android की 100+ फाइलें बना देगा
       - name: Create Flutter Project Files
         run: flutter create . --platforms android
 
